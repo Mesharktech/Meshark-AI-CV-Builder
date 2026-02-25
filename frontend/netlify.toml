@@ -1,0 +1,13 @@
+# Use Node.js runtime
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Fallback routing for Single Page Applications (React Router, etc.)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

@@ -85,8 +85,9 @@ function App() {
     setIsLoading(true);
 
     try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
       // Send to our backend
-      const response = await fetch('http://localhost:8080/api/chat', {
+      const response = await fetch(`${apiUrl}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -125,7 +126,8 @@ function App() {
       const colors = ['#319795', '#e53e3e', '#3182ce', '#805ad5', '#d69e2e'];
       const randomColor = colors[Math.floor(Math.random() * colors.length)];
 
-      const response = await fetch('http://localhost:8080/api/generate_pdf', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+      const response = await fetch(`${apiUrl}/api/generate_pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
