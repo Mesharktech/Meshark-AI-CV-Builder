@@ -1,0 +1,52 @@
+\documentclass[11pt]{article}
+\usepackage{titlesec}
+\usepackage{titling}
+\usepackage[margin=1in]{geometry}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+
+% Define custom highly dynamic colors from variables
+\definecolor{primaryColor}{HTML}{<COLOR_HEX>}
+\definecolor{darkGray}{HTML}{333333}
+
+% Custom title formatting
+\titleformat{\section}
+{\color{primaryColor}\Large\scshape\raggedright}
+{}{0em}
+{}[\titlerule]
+
+\renewcommand{\maketitle}{
+\begin{center}
+{\Huge \bfseries <FIRST_NAME> <LAST_NAME>} \\ \vspace{0.2em}
+{\large \textit{<TITLE>}} \\ \vspace{0.4em}
+\textcolor{darkGray}{
+<ADDRESS> $\vert$ \href{mailto:<EMAIL>}{<EMAIL>} $\vert$ <PHONE>
+}
+\end{center}
+}
+
+\begin{document}
+
+\maketitle
+\vspace{-1.5em}
+
+\section{Summary}
+<SUMMARY>
+
+\section{Experience}
+<EXPERIENCE> 
+% Format: \noindent\textbf{Role} \hfill \textit{Location}\\
+% \noindent \textit{Company} \hfill Dates \\
+% \begin{itemize}[noitemsep] \item Item \end{itemize} \vspace{0.5em}
+
+\section{Education}
+<EDUCATION>
+% Format: \noindent\textbf{Institution} \hfill Location\\
+% \noindent \textit{Degree} \hfill Year \\ \vspace{0.5em}
+
+\section{Skills}
+<SKILLS>
+% Format: \textbf{Category: } Skill 1, Skill 2
+
+\end{document}

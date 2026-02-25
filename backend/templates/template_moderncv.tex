@@ -1,0 +1,29 @@
+\documentclass[11pt,a4paper,sans]{moderncv}
+\moderncvstyle{casual} % Options: 'casual', 'classic', 'banking', 'oldstyle', 'fancy'
+\moderncvcolor{<COLOR_VAR>} % Options: 'blue', 'orange', 'green', 'red', 'purple', 'grey', 'black'
+
+\usepackage[utf8]{inputenc}
+\usepackage[scale=0.8]{geometry}
+
+\name{<FIRST_NAME>}{<LAST_NAME>}
+\title{<TITLE>}
+\address{<ADDRESS>}{}{}
+\phone[mobile]{<PHONE>}
+\email{<EMAIL>}
+
+\begin{document}
+\makecvtitle
+
+\section{Professional Profile}
+<SUMMARY>
+
+\section{Education}
+<EDUCATION> % Needs to be formatted dynamically, e.g. \cventry{Year--Year}{Degree}{Institution}{City}{\textit{Grade}}{Description}
+
+\section{Experience}
+<EXPERIENCE> % \cventry{Year--Year}{Job title}{Employer}{City}{}{General description no longer than 1--2 lines.\newline{}\begin{itemize}\item Item 1\item Item 2\end{itemize}}
+
+\section{Skills}
+<SKILLS> % \cvitem{Category}{Skill 1, Skill 2, Skill 3}
+
+\end{document}
