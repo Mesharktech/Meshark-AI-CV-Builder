@@ -2,10 +2,9 @@ import os
 import json
 import urllib.request
 import urllib.parse
-import asyncio
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from groq import Groq
 from dotenv import load_dotenv
@@ -111,8 +110,8 @@ Output ONLY valid JSON.
 def read_root():
     return {"message": "Welcome to Meshark AI CV Builder Backend"}
 
-@app.post("/api/chat")
-async def chat_with_ai(request: ChatRequest):
+@app.post("/api/chat", response_model=ChatResponse)
+def chat_with_ai(request: ChatRequest):
     if not groq_client:
         raise HTTPException(status_code=500, detail="Groq API not configured properly.")
 
@@ -121,61 +120,45 @@ async def chat_with_ai(request: ChatRequest):
         messages.append({"role": msg["role"], "content": msg["content"]})
     messages.append({"role": "user", "content": request.message})
 
-    async def generate_chat_stream():
-        try:
-            stream = groq_client.chat.completions.create(
-                messages=messages,
-                model="llama-3.1-8b-instant", 
-                temperature=0.7,
-                max_tokens=1024,
-                stream=True
+    try:
+        completion = groq_client.chat.completions.create(
+            messages=messages,
+            model="llama-3.1-8b-instant", 
+            temperature=0.7,
+            max_tokens=1024,
+        )
+        
+        ai_reply = completion.choices[0].message.content
+        
+        is_complete = False
+        extracted_data = None
+
+        if "[ALL_DATA_COLLECTED]" in ai_reply:
+            is_complete = True
+            ai_reply = ai_reply.replace("[ALL_DATA_COLLECTED]", "Great! I have everything I need. Just click the button below to sign in and save your CV!").strip()
+            
+            # Trigger JSON Extraction Call
+            extraction_messages = messages.copy()
+            extraction_messages.append({"role": "assistant", "content": ai_reply})
+            extraction_messages.append({"role": "user", "content": EXTRACTION_PROMPT})
+
+            ext_completion = groq_client.chat.completions.create(
+                messages=extraction_messages,
+                model="llama-3.1-8b-instant",
+                temperature=0.1, # Low temperature for accurate JSON extraction
+                response_format={"type": "json_object"}
             )
-            
-            full_reply = ""
-            for chunk in stream:
-                if chunk.choices[0].delta.content is not None:
-                    content = chunk.choices[0].delta.content
-                    full_reply += content
-                    
-                    # Yield raw text chunks to the client
-                    yield f"data: {json.dumps({'type': 'chunk', 'content': content})}\n\n"
-                    # Small sleep to allow yielding
-                    await asyncio.sleep(0.01)
 
-            # Once the stream finishes, check if we collected all data
-            if "[ALL_DATA_COLLECTED]" in full_reply:
-                # Clean up the payload sent to the user
-                final_text = "Great! I have everything I need. Just click the button below to sign in and save your CV!"
-                yield f"data: {json.dumps({'type': 'chunk', 'content': final_text})}\n\n"
-                
-                # Trigger JSON Extraction Call in the background
-                extraction_messages = messages.copy()
-                extraction_messages.append({"role": "assistant", "content": full_reply})
-                extraction_messages.append({"role": "user", "content": EXTRACTION_PROMPT})
+            try:
+                 extracted_data = json.loads(ext_completion.choices[0].message.content)
+            except Exception as e:
+                 print("Error parsing JSON extraction", e)
+                 extracted_data = None
 
-                try:
-                    ext_completion = groq_client.chat.completions.create(
-                        messages=extraction_messages,
-                        model="llama-3.1-8b-instant",
-                        temperature=0.1, 
-                        response_format={"type": "json_object"}
-                    )
-                    extracted_data = json.loads(ext_completion.choices[0].message.content)
-                except Exception as e:
-                    print("Error parsing JSON extraction", e)
-                    extracted_data = None
-                
-                # Yield the final completion flag with the extracted data
-                yield f"data: {json.dumps({'type': 'complete', 'extracted_data': extracted_data})}\n\n"
-            
-            # Send end of stream flag
-            yield f"data: {json.dumps({'type': 'done'})}\n\n"
-
-        except Exception as e:
-            print(f"Error in stream: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
-
-    return StreamingResponse(generate_chat_stream(), media_type="text/event-stream")
+        return ChatResponse(reply=ai_reply, is_complete=is_complete, extracted_data=extracted_data)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 class CVGenerateRequest(BaseModel):
     cv_data: dict
