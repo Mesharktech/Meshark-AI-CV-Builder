@@ -126,59 +126,20 @@ function App() {
 
       if (!response.ok) throw new Error('Network response was not ok');
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder('utf-8');
+      const data = await response.json();
 
-      let finalDataCollected = false;
-      let aiExtractedData = null;
-      let fullBotResponse = ''; // To collect the full response for speakText
+      setMessages(prev => {
+        const updated = [...prev];
+        const lastIdx = updated.length - 1;
+        updated[lastIdx] = { ...updated[lastIdx], content: data.reply };
+        return updated;
+      });
+      
+      speakText(data.reply);
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        const chunkText = decoder.decode(value, { stream: true });
-        // The chunk might contain multiple 'data: {...}' lines
-        const lines = chunkText.split('\\n\\n');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const dataStr = line.slice(6);
-            try {
-              const data = JSON.parse(dataStr);
-
-              if (data.type === 'chunk') {
-                // Instantly append streamed text chunk
-                setMessages(prev => {
-                  const updated = [...prev];
-                  const lastIdx = updated.length - 1;
-                  updated[lastIdx] = {
-                    ...updated[lastIdx],
-                    content: updated[lastIdx].content + data.content
-                  };
-                  return updated;
-                });
-                fullBotResponse += data.content;
-              } else if (data.type === 'complete') {
-                finalDataCollected = true;
-                aiExtractedData = data.extracted_data;
-              } else if (data.type === 'error') {
-                console.error("Streaming error:", data.message);
-              } else if (data.type === 'done') {
-                // End of stream
-              }
-            } catch (e) {
-              // Ignore incomplete JSON parsing errors caused by text chunking
-            }
-          }
-        }
-      }
-
-      speakText(fullBotResponse);
-
-      if (finalDataCollected && aiExtractedData) {
+      if (data.is_complete && data.extracted_data) {
         setIsChatComplete(true);
-        setCvData(aiExtractedData);
+        setCvData(data.extracted_data);
       }
 
     } catch (error) {
