@@ -9,17 +9,27 @@ from pydantic import BaseModel
 from groq import Groq
 from dotenv import load_dotenv
 
+from contextlib import asynccontextmanager
+
 from auth import verify_token
 from database import get_db, engine, Base
 from sqlalchemy.orm import Session
 from models import CV
 
 # Automatically create database tables if they don't exist
-Base.metadata.create_all(bind=engine)
+# We do this in a lifespan event to prevent crashing if the database is asleep/offline
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("Database tables verified.")
+    except Exception as e:
+        print(f"Warning: Could not connect to database on startup. {e}")
+    yield
 
 load_dotenv()
 
-app = FastAPI(title="Meshark AI CV Builder API")
+app = FastAPI(title="Meshark AI CV Builder API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
