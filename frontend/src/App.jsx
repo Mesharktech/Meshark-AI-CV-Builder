@@ -104,7 +104,10 @@ function App() {
     setIsLoading(true);
 
     try {
-      const token = user ? await user.getIdToken() : null;
+      let token = null;
+      if (user) {
+        token = await user.getIdToken();
+      }
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
       const headers = { 'Content-Type': 'application/json' };
