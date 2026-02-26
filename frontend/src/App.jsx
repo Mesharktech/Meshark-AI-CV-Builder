@@ -27,10 +27,13 @@ function App() {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [isVoiceMode, setIsVoiceMode] = useState(true);
+  const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const [isChatComplete, setIsChatComplete] = useState(false);
+  const [cvData, setCvData] = useState(null);
 
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   const recognitionRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -86,49 +89,129 @@ function App() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSend = async (e) => {
-    e.preventDefault();
+  const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
+    setIsVoiceMode(false);
     const userMsg = input.trim();
     setInput('');
+    // Ensure we keep the full history when sending a new message
+    const newMessages = [...messages, { role: 'user', content: userMsg }];
+    setMessages(newMessages);
 
-    const newHistory = [...messages, { role: 'user', content: userMsg }];
-    setMessages(newHistory);
+    // Add an empty assistant message to append streaming chunks to
+    setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
     setIsLoading(true);
 
     try {
-      const token = await user.getIdToken();
+      const token = user ? await user.getIdToken() : null;
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-      // Send to our backend
+
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
       const response = await fetch(`${apiUrl}/api/chat`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: headers,
         body: JSON.stringify({
           message: userMsg,
-          history: messages
+          history: newMessages.slice(0, -1) // Exclude the message we just added
         })
       });
 
-      if (!response.ok) throw new Error('API Error');
-      const data = await response.json();
+      if (!response.ok) throw new Error('Network response was not ok');
 
-      setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
-      speakText(data.reply);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
 
-      // Trigger PDF generation if ready
-      if (data.is_complete && data.extracted_data) {
-        generatePdf(data.extracted_data);
+      let finalDataCollected = false;
+      let aiExtractedData = null;
+      let fullBotResponse = ''; // To collect the full response for speakText
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        const chunkText = decoder.decode(value, { stream: true });
+        // The chunk might contain multiple 'data: {...}' lines
+        const lines = chunkText.split('\\n\\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6);
+            try {
+              const data = JSON.parse(dataStr);
+
+              if (data.type === 'chunk') {
+                // Instantly append streamed text chunk
+                setMessages(prev => {
+                  const updated = [...prev];
+                  const lastIdx = updated.length - 1;
+                  updated[lastIdx] = {
+                    ...updated[lastIdx],
+                    content: updated[lastIdx].content + data.content
+                  };
+                  return updated;
+                });
+                fullBotResponse += data.content;
+              } else if (data.type === 'complete') {
+                finalDataCollected = true;
+                aiExtractedData = data.extracted_data;
+              } else if (data.type === 'error') {
+                console.error("Streaming error:", data.message);
+              } else if (data.type === 'done') {
+                // End of stream
+              }
+            } catch (e) {
+              // Ignore incomplete JSON parsing errors caused by text chunking
+            }
+          }
+        }
+      }
+
+      speakText(fullBotResponse);
+
+      if (finalDataCollected && aiExtractedData) {
+        setIsChatComplete(true);
+        setCvData(aiExtractedData);
       }
 
     } catch (error) {
-      console.error(error);
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I encountered an error connecting to the server. Please ensure the backend is running.' }]);
+      console.error("Error communicating with AI:", error);
+      setMessages(prev => {
+        const updated = [...prev];
+        const lastIdx = updated.length - 1;
+        updated[lastIdx] = { role: 'assistant', content: "Sorry, I encountered an error connecting to the server. Please try again." };
+        return updated;
+      });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isChatComplete && cvData) {
+      if (!user) {
+        setShowLoginPrompt(true);
+      } else {
+        generatePdf(cvData);
+        setIsChatComplete(false); // Reset after triggering PDF generation
+        setCvData(null); // Clear data
+      }
+    }
+  }, [isChatComplete, cvData, user]);
+
+  const handlePostLoginGenerate = async () => {
+    try {
+      const resultUser = await signInWithGoogle();
+      if (resultUser && cvData) {
+        setShowLoginPrompt(false);
+        // The useEffect for isChatComplete will re-evaluate and generate PDF now that user is set
+      }
+    } catch (error) {
+      console.error("Login failed", error);
     }
   };
 
@@ -193,29 +276,6 @@ function App() {
     );
   }
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center font-sans">
-        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-sm w-full text-center flex flex-col items-center border border-gray-100">
-          <div className="bg-brand/10 p-4 rounded-2xl mb-6">
-            <Sparkles className="text-brand" size={48} />
-          </div>
-          <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-brand to-brand-light mb-2">
-            Meshark AI Builder
-          </h1>
-          <p className="text-gray-500 mb-8 text-sm">Sign in to generate your professional CV</p>
-          <button
-            onClick={signInWithGoogle}
-            className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-6 py-3 rounded-xl shadow-sm transition-all font-medium"
-          >
-            <svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)"><path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z" /><path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z" /><path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.724 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z" /><path fill="#EA4335" d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.789 L -6.734 42.369 C -8.804 40.429 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z" /></g></svg>
-            Continue with Google
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 flex font-sans relative">
       {/* Chat Section */}
@@ -247,13 +307,15 @@ function App() {
             >
               {isVoiceMode ? <Volume2 size={18} /> : <VolumeX size={18} />}
             </button>
-            <button
-              onClick={logout}
-              className="p-2 rounded-full transition-colors bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-500"
-              title="Sign Out"
-            >
-              <LogOut size={18} />
-            </button>
+            {user && (
+              <button
+                onClick={logout}
+                className="p-2 rounded-full transition-colors bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-500"
+                title="Sign Out"
+              >
+                <LogOut size={18} />
+              </button>
+            )}
             {pdfBlob && (
               <button
                 onClick={() => setShowPdfModal(true)}
@@ -368,6 +430,28 @@ function App() {
                 title="CV Preview"
               />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Login Prompt Modal for PDF Generation */}
+      {showLoginPrompt && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white p-8 rounded-2xl shadow-xl max-w-sm w-full text-center flex flex-col items-center border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-brand/10 p-4 rounded-2xl mb-6">
+              <FileText className="text-brand" size={48} />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">
+              Almost Done!
+            </h2>
+            <p className="text-gray-500 mb-8 text-sm">Sign in to generate, save, and download your finalized CV.</p>
+            <button
+              onClick={handlePostLoginGenerate}
+              className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-6 py-3 rounded-xl shadow-sm transition-all font-medium"
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)"><path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z" /><path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z" /><path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.724 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z" /><path fill="#EA4335" d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.789 L -6.734 42.369 C -8.804 40.429 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z" /></g></svg>
+              Continue with Google
+            </button>
           </div>
         </div>
       )}
