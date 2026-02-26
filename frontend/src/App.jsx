@@ -26,6 +26,7 @@ function App() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pdfBlob, setPdfBlob] = useState(null);
+  const [pdfUrl, setPdfUrl] = useState(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -221,6 +222,11 @@ function App() {
       if (!response.ok) throw new Error('PDF Generation failed');
 
       const blob = await response.blob();
+      // Revoke any previously allocated object URL
+      setPdfUrl(prev => {
+        if (prev) window.URL.revokeObjectURL(prev);
+        return window.URL.createObjectURL(blob);
+      });
       setPdfBlob(blob);
       setShowPdfModal(true);
 
@@ -233,10 +239,9 @@ function App() {
   };
 
   const handleDownload = () => {
-    if (!pdfBlob) return;
-    const url = window.URL.createObjectURL(pdfBlob);
+    if (!pdfUrl) return;
     const a = document.createElement('a');
-    a.href = url;
+    a.href = pdfUrl;
     a.download = 'Meshark_AI_CV.pdf';
     document.body.appendChild(a);
     a.click();
@@ -406,7 +411,7 @@ function App() {
             {/* Modal Content - PDF iFrame */}
             <div className="flex-1 w-full bg-gray-100 relative">
               <iframe
-                src={`${window.URL.createObjectURL(pdfBlob)}#toolbar=0&view=FitH`}
+                src={pdfUrl}
                 className="absolute inset-0 w-full h-full border-0"
                 title="CV Preview"
               />

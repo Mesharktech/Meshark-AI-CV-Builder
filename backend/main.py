@@ -65,10 +65,14 @@ Your goal is to interview the user to collect information needed to build a prof
 Ask ONE question at a time. Be conversational and encouraging.
 You need to collect:
 1. Full Name and Contact Info (Email, Phone, Location)
-2. Professional Summary / Profile
-3. Education (Degree, Institution, Year)
-4. Work Experience (Role, Company, Dates, Key Responsibilities)
-5. Technical/Soft Skills
+2. Personal Details (Date of Birth/Age, Nationality, District/Region)
+3. Professional Summary / Profile
+4. Education (Degree, Institution, Year)
+5. Work Experience (Role, Company, Dates, Key Responsibilities)
+6. Technical/Soft Skills
+7. Languages Spoken
+8. Extracurricular Activities and Hobbies
+9. Referees (Name, Title, Contact Info)
 
 Once you have gathered all necessary information, end your response with exactly: "[ALL_DATA_COLLECTED]".
 Do not output "[ALL_DATA_COLLECTED]" until you have enough details for a complete CV.
@@ -95,6 +99,11 @@ Ensure the keys exactly match this structure:
   "address": "...",
   "phone": "...",
   "email": "...",
+  "personal_details": {
+    "dob": "...",
+    "nationality": "...",
+    "district": "..."
+  },
   "summary": "... (Write a robust, expanded 3-4 sentence professional summary here)",
   "education": [
      {"degree": "...", "institution": "...", "location": "...", "year": "..."}
@@ -111,7 +120,12 @@ Ensure the keys exactly match this structure:
   "skills": {
       "Category 1 (e.g. Core Competencies)": ["skill1", "skill2"],
       "Category 2 (e.g. Technical Skills)": ["skill3", "skill4"]
-  }
+  },
+  "languages": ["Language 1", "Language 2"],
+  "hobbies": ["Hobby 1", "Hobby 2"],
+  "referees": [
+      {"name": "...", "title": "...", "contact": "..."}
+  ]
 }
 Output ONLY valid JSON.
 """
@@ -243,10 +257,35 @@ def generate_pdf(request: CVGenerateRequest, user: dict = Depends(verify_token),
     tex_content = tex_content.replace("<EMAIL>", data.get("email", ""))
     tex_content = tex_content.replace("<SUMMARY>", data.get("summary", ""))
 
+    pd = data.get("personal_details", {})
+    pd_parts = []
+    if pd.get("dob"): pd_parts.append(f"DOB: {pd.get('dob')}")
+    if pd.get("nationality"): pd_parts.append(f"Nationality: {pd.get('nationality')}")
+    if pd.get("district"): pd_parts.append(f"District: {pd.get('district')}")
+    pd_str = " | ".join(pd_parts)
+
+    hobbies = data.get("hobbies", [])
+    langs = data.get("languages", [])
+    refs = data.get("referees", [])
+
     # Template specifics
     if request.template_name == "moderncv":
         tex_content = tex_content.replace("<COLOR_VAR>", request.color)
         
+        pd_cmd = f"\\extrainfo{{{pd_str}}}" if pd_str else ""
+        tex_content = tex_content.replace("<PERSONAL_DETAILS_CMD>", pd_cmd)
+
+        hobby_str = f"\\cvitem{{}}{{{', '.join(hobbies)}}}\n" if hobbies else ""
+        tex_content = tex_content.replace("<HOBBIES>", hobby_str)
+
+        lang_str = f"\\cvitem{{}}{{{', '.join(langs)}}}\n" if langs else ""
+        tex_content = tex_content.replace("<LANGUAGES>", lang_str)
+
+        ref_str = ""
+        for r in refs:
+             ref_str += f"\\cventry{{}}{{{r.get('name', '')}}}{{{r.get('title', '')}}}{{{r.get('contact', '')}}}{{}}{{}}\n"
+        tex_content = tex_content.replace("<REFEREES>", ref_str)
+
         # Format Education
         edu_str = ""
         for edu in data.get("education", []):
@@ -273,6 +312,26 @@ def generate_pdf(request: CVGenerateRequest, user: dict = Depends(verify_token),
     elif request.template_name == "colorful":
         tex_content = tex_content.replace("<COLOR_HEX>", request.color.replace("#", ""))
         
+        pd_cmd = f"\\\\ \\vspace{{0.2em}}\n\\textcolor{{darkGray}}{{\\small {pd_str}}}" if pd_str else ""
+        tex_content = tex_content.replace("<PERSONAL_DETAILS_CMD>", pd_cmd)
+
+        hobby_str = f"\\noindent {', '.join(hobbies)} \\\\ \\vspace{{0.5em}}\n" if hobbies else ""
+        tex_content = tex_content.replace("<HOBBIES>", hobby_str)
+
+        lang_str = f"\\noindent {', '.join(langs)} \\\\ \\vspace{{0.5em}}\n" if langs else ""
+        tex_content = tex_content.replace("<LANGUAGES>", lang_str)
+
+        ref_str = ""
+        for r in refs:
+             name_str = r.get("name", "")
+             contact_str = r.get("contact", "")
+             title_str = r.get("title", "")
+             if name_str or contact_str:
+                 ref_str += f"\\noindent\\textbf{{{name_str}}} \\hfill {contact_str} \\\\\n"
+             if title_str:
+                 ref_str += f"\\noindent \\textit{{{title_str}}} \\\\ \\vspace{{0.5em}}\n"
+        tex_content = tex_content.replace("<REFEREES>", ref_str)
+
         # Format Education
         edu_str = ""
         for edu in data.get("education", []):
