@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 from auth import verify_token
 from database import get_db, engine, Base
 from sqlalchemy.orm import Session
-from models import CV
+from models import CV, Template
 
 # Automatically create database tables if they don't exist
 # We do this in a lifespan event to prevent crashing if the database is asleep/offline
@@ -168,6 +168,54 @@ def chat_with_ai(request: ChatRequest):
         return ChatResponse(reply=ai_reply, is_complete=is_complete, extracted_data=extracted_data)
         
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/templates")
+def get_templates(db: Session = Depends(get_db)):
+    templates = db.query(Template).filter(Template.is_active == True).all()
+    return [{
+        "id": t.id,
+        "name": t.name,
+        "description": t.description,
+        "thumbnail_url": t.thumbnail_url,
+        "is_premium": t.is_premium,
+        "price": t.price
+    } for t in templates]
+
+@app.post("/api/admin/seed_templates")
+def seed_templates(db: Session = Depends(get_db)):
+    try:
+        existing = db.query(Template).first()
+        if existing:
+            return {"message": "Templates already seeded"}
+            
+        templates_to_add = [
+            Template(
+                id="moderncv",
+                name="Modern (Free)",
+                description="A clean, professional two-column layout perfect for traditional roles.",
+                thumbnail_url="https://makefreecv.com/assets/images/templates/professional.jpg",
+                is_premium=False,
+                price=0,
+                storage_path="templates/template_moderncv.tex",
+                is_active=True
+            ),
+            Template(
+                id="colorful",
+                name="Creative Colors (Premium)",
+                description="Stand out from the crowd with vibrant header sections. Ideal for modern digital roles.",
+                thumbnail_url="https://makefreecv.com/assets/images/templates/creative.jpg",
+                is_premium=True,
+                price=500,
+                storage_path="templates/template_colorful.tex",
+                is_active=True
+            )
+        ]
+        db.add_all(templates_to_add)
+        db.commit()
+        return {"message": "Templates seeded successfully"}
+    except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 class CVGenerateRequest(BaseModel):
