@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, FileText, Download, Loader2, Sparkles, Mic, MicOff, Volume2, VolumeX, LogOut } from 'lucide-react';
 import { auth, signInWithGoogle, logout } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import TemplateSelectionModal from './components/TemplateSelectionModal';
 
 const ChatMessage = ({ message, isBot }) => (
   <div className={`flex w-full ${isBot ? 'justify-start' : 'justify-end'} mb-4`}>
@@ -34,6 +35,8 @@ function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [showTemplateSelection, setShowTemplateSelection] = useState(false);
+  const [selectedTemplateConfig, setSelectedTemplateConfig] = useState(null);
 
   const recognitionRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -134,7 +137,7 @@ function App() {
         updated[lastIdx] = { ...updated[lastIdx], content: data.reply };
         return updated;
       });
-      
+
       speakText(data.reply);
 
       if (data.is_complete && data.extracted_data) {
@@ -157,41 +160,38 @@ function App() {
 
   useEffect(() => {
     if (isChatComplete && cvData) {
-      if (!user) {
-        setShowLoginPrompt(true);
-      } else {
-        generatePdf(cvData);
-        setIsChatComplete(false); // Reset after triggering PDF generation
-        setCvData(null); // Clear data
-      }
+      setShowTemplateSelection(true);
+      setIsChatComplete(false); // Consume the complete event here
     }
-  }, [isChatComplete, cvData, user]);
+  }, [isChatComplete, cvData]);
+
+  const handleTemplateConfirm = (config) => {
+    setShowTemplateSelection(false);
+    setSelectedTemplateConfig(config);
+    if (!user) {
+      setShowLoginPrompt(true);
+    } else {
+      generatePdf(cvData, config);
+    }
+  };
 
   const handlePostLoginGenerate = async () => {
     try {
       const resultUser = await signInWithGoogle();
-      if (resultUser && cvData) {
+      if (resultUser && cvData && selectedTemplateConfig) {
         setShowLoginPrompt(false);
-        // The useEffect for isChatComplete will re-evaluate and generate PDF now that user is set
+        generatePdf(cvData, selectedTemplateConfig);
       }
     } catch (error) {
       console.error("Login failed", error);
     }
   };
 
-  const generatePdf = async (cvData) => {
+  const generatePdf = async (data, templateConfig) => {
     setIsGeneratingPdf(true);
     try {
-      // Pick template
-      const templates = ['colorful', 'moderncv'];
-      const randomTemplate = templates[Math.floor(Math.random() * templates.length)];
-
-      // Random brand color for the template
-      const colors = ['#319795', '#e53e3e', '#3182ce', '#805ad5', '#d69e2e'];
-      const randomColor = colors[Math.floor(Math.random() * colors.length)];
-
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-      const token = await user.getIdToken();
+      const token = await auth.currentUser.getIdToken();
 
       const response = await fetch(`${apiUrl}/api/generate_pdf`, {
         method: 'POST',
@@ -200,9 +200,9 @@ function App() {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          cv_data: cvData,
-          template_name: randomTemplate,
-          color: randomTemplate === 'moderncv' ? 'blue' : randomColor
+          cv_data: data,
+          template_name: templateConfig.templateId,
+          color: templateConfig.color
         })
       });
 
@@ -396,6 +396,14 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Template Selection Modal */}
+      {showTemplateSelection && (
+        <TemplateSelectionModal
+          onClose={() => setShowTemplateSelection(false)}
+          onConfirm={handleTemplateConfirm}
+        />
       )}
 
       {/* Login Prompt Modal for PDF Generation */}
