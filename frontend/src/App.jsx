@@ -3,6 +3,7 @@ import { Send, FileText, Download, Loader2, Sparkles, Mic, MicOff, Volume2, Volu
 import { auth, signInWithGoogle, logout } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import TemplateSelectionModal from './components/TemplateSelectionModal';
+import AdminDashboard from './components/AdminDashboard';
 
 const ChatMessage = ({ message, isBot }) => (
   <div className={`flex w-full ${isBot ? 'justify-start' : 'justify-end'} mb-4`}>
@@ -37,9 +38,16 @@ function App() {
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [showTemplateSelection, setShowTemplateSelection] = useState(false);
   const [selectedTemplateConfig, setSelectedTemplateConfig] = useState(null);
+  const [currentHash, setCurrentHash] = useState(window.location.hash);
 
   const recognitionRef = useRef(null);
   const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    const handleHashChange = () => setCurrentHash(window.location.hash);
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -238,6 +246,10 @@ function App() {
         <Loader2 className="animate-spin text-brand" size={48} />
       </div>
     );
+  }
+
+  if (currentHash === '#admin') {
+    return <AdminDashboard user={user} />;
   }
 
   return (
