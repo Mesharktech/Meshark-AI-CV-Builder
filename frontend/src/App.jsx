@@ -38,15 +38,19 @@ function App() {
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [showTemplateSelection, setShowTemplateSelection] = useState(false);
   const [selectedTemplateConfig, setSelectedTemplateConfig] = useState(null);
-  const [currentHash, setCurrentHash] = useState(window.location.hash);
+  const [currentRoute, setCurrentRoute] = useState(window.location.pathname + window.location.hash);
 
   const recognitionRef = useRef(null);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    const handleHashChange = () => setCurrentHash(window.location.hash);
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    const handleRouteChange = () => setCurrentRoute(window.location.pathname + window.location.hash);
+    window.addEventListener('hashchange', handleRouteChange);
+    window.addEventListener('popstate', handleRouteChange);
+    return () => {
+      window.removeEventListener('hashchange', handleRouteChange);
+      window.removeEventListener('popstate', handleRouteChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -248,7 +252,8 @@ function App() {
     );
   }
 
-  if (currentHash === '#admin') {
+  // Handle Admin Route exclusively
+  if (currentRoute.includes('/admin') || currentRoute.includes('#admin')) {
     return <AdminDashboard user={user} />;
   }
 
