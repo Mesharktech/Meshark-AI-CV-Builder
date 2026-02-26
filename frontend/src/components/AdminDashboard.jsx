@@ -6,8 +6,8 @@ export default function AdminDashboard({ user }) {
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('templates'); // 'templates', 'add'
 
-    // Only allow admin (we'll just use a simple check for MVP, or assume the route is protected)
-    const isAdmin = user && user.email === 'meshark1879@gmail.com'; // Adjust this for your actual admin email
+    // Only allow admin via Google Auth email check
+    const isAdmin = user && user.email === 'mesharkmuindi69@gmail.com';
 
     useEffect(() => {
         if (isAdmin) fetchTemplates();
