@@ -3,12 +3,20 @@ import json
 import random
 import urllib.request
 import urllib.parse
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from groq import Groq
 from dotenv import load_dotenv
+
+from auth import verify_token
+from database import get_db, engine, Base
+from sqlalchemy.orm import Session
+from models import CV
+
+# Automatically create database tables if they don't exist
+Base.metadata.create_all(bind=engine)
 
 load_dotenv()
 
@@ -104,7 +112,7 @@ def read_root():
     return {"message": "Welcome to Meshark AI CV Builder Backend"}
 
 @app.post("/api/chat", response_model=ChatResponse)
-def chat_with_ai(request: ChatRequest):
+def chat_with_ai(request: ChatRequest, user: dict = Depends(verify_token)):
     if not groq_client:
         raise HTTPException(status_code=500, detail="Groq API not configured properly.")
 
@@ -159,7 +167,7 @@ class CVGenerateRequest(BaseModel):
     color: str = "0056b3" # Hex for "colorful" or word like 'blue' for moderncv
 
 @app.post("/api/generate_pdf")
-def generate_pdf(request: CVGenerateRequest):
+def generate_pdf(request: CVGenerateRequest, user: dict = Depends(verify_token), db: Session = Depends(get_db)):
     data = request.cv_data
     template_path = f"templates/template_{request.template_name}.tex"
     
@@ -250,6 +258,21 @@ def generate_pdf(request: CVGenerateRequest):
     try:
         with urllib.request.urlopen(req) as response:
             pdf_bytes = response.read()
+
+            try:
+                # Save CV data to PostgreSQL
+                new_cv = CV(
+                    user_id=user.get("uid"),
+                    title=data.get("title", "My Auto-Generated CV"),
+                    cv_data=data
+                )
+                db.add(new_cv)
+                db.commit()
+                db.refresh(new_cv)
+                print(f"Saved CV to DB for user {user.get('uid')} (ID: {new_cv.id})")
+            except Exception as e:
+                print(f"Failed to save CV to Database: {e}")
+
             return Response(content=pdf_bytes, media_type="application/pdf")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to compile PDF: {str(e)}")
