@@ -2,6 +2,7 @@ services:
   - type: web
     name: meshark-cv-backend
     env: python
+    plan: free
     region: frankfurt # Same region as DB pooler for low latency
     buildCommand: "cd backend && pip install -r requirements.txt"
     startCommand: "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
