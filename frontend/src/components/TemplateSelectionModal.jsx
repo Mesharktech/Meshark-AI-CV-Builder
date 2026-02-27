@@ -127,7 +127,7 @@ export default function TemplateSelectionModal({ onClose, onConfirm }) {
                     {/* Color Selection */}
                     <div className="p-6 bg-gray-50/50 rounded-2xl border border-gray-100">
                         <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Choose Accent Color</h3>
-                        <div className="flex flex-wrap gap-4">
+                        <div className="flex flex-wrap gap-4 mb-5">
                             {colors.map(c => (
                                 <button
                                     key={c.value}
@@ -140,7 +140,36 @@ export default function TemplateSelectionModal({ onClose, onConfirm }) {
                                 </button>
                             ))}
                         </div>
+                        {/* Custom Hex Input */}
+                        <div className="flex items-center gap-3">
+                            <div
+                                className="w-9 h-9 rounded-lg border border-gray-200 shadow-inner shrink-0 transition-colors"
+                                style={{ backgroundColor: selectedColor }}
+                            />
+                            <div className="flex-1">
+                                <label className="block text-xs text-gray-400 font-medium mb-1">Custom Hex Color</label>
+                                <input
+                                    type="text"
+                                    value={selectedColor}
+                                    onChange={e => {
+                                        const v = e.target.value.startsWith('#') ? e.target.value : `#${e.target.value}`;
+                                        setSelectedColor(v);
+                                    }}
+                                    placeholder="#3182ce"
+                                    maxLength={7}
+                                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand font-mono"
+                                />
+                            </div>
+                            <input
+                                type="color"
+                                value={selectedColor}
+                                onChange={e => setSelectedColor(e.target.value)}
+                                className="w-10 h-9 border-0 rounded-lg cursor-pointer bg-transparent"
+                                title="Open color wheel"
+                            />
+                        </div>
                     </div>
+
                 </div>
 
                 {/* Footer */}

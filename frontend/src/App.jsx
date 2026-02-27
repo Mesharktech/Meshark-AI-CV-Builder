@@ -4,6 +4,7 @@ import { auth, signInWithGoogle, logout } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import TemplateSelectionModal from './components/TemplateSelectionModal';
 import AdminDashboard from './components/AdminDashboard';
+import UserDashboard from './components/UserDashboard';
 
 const ChatMessage = ({ message, isBot }) => (
   <div className={`flex w-full ${isBot ? 'justify-start' : 'justify-end'} mb-4`}>
@@ -39,6 +40,7 @@ function App() {
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [showTemplateSelection, setShowTemplateSelection] = useState(false);
   const [selectedTemplateConfig, setSelectedTemplateConfig] = useState(null);
+  const [showDashboard, setShowDashboard] = useState(false);
   const [currentRoute, setCurrentRoute] = useState(window.location.pathname + window.location.hash);
 
   const recognitionRef = useRef(null);
@@ -263,6 +265,11 @@ function App() {
     return <AdminDashboard user={user} />;
   }
 
+  // Handle User Dashboard
+  if (showDashboard) {
+    return <UserDashboard user={user} onBack={() => setShowDashboard(false)} />;
+  }
+
   return (
     <div className="min-h-[100dvh] bg-gray-50 flex font-sans relative">
       {/* Chat Section */}
@@ -283,7 +290,17 @@ function App() {
           </div>
 
           {/* Action Area */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {user && (
+              <button
+                onClick={() => setShowDashboard(true)}
+                className="flex items-center gap-1.5 text-xs sm:text-sm font-medium text-gray-500 hover:text-brand bg-gray-100 hover:bg-brand/10 px-3 py-2 rounded-full transition-colors"
+                title="My Documents"
+              >
+                <FileText size={15} />
+                <span className="hidden sm:inline">My CVs</span>
+              </button>
+            )}
             <button
               onClick={() => {
                 setIsVoiceMode(!isVoiceMode);

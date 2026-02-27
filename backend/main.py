@@ -196,6 +196,35 @@ def get_templates(db: Session = Depends(get_db)):
         "price": t.price
     } for t in templates]
 
+@app.get("/api/cvs")
+async def list_user_cvs(user: dict = Depends(verify_token), db: Session = Depends(get_db)):
+    """List all CVs for the authenticated user."""
+    user_cvs = db.query(CV).filter(CV.user_id == user.get("uid")).order_by(CV.created_at.desc()).all()
+    return [{
+        "id": cv.id,
+        "title": cv.title,
+        "template_name": cv.template_name,
+        "cv_data": cv.cv_data,
+        "created_at": cv.created_at.isoformat() if cv.created_at else None
+    } for cv in user_cvs]
+
+@app.get("/api/cvs/{cv_id}/download")
+async def download_cv(cv_id: int, user: dict = Depends(verify_token), db: Session = Depends(get_db)):
+    """Re-compile and return the PDF for a previously saved CV."""
+    cv = db.query(CV).filter(CV.id == cv_id, CV.user_id == user.get("uid")).first()
+    if not cv:
+        raise HTTPException(status_code=404, detail="CV not found.")
+
+    # Re-use the generate_pdf logic by building the request object
+    req = CVGenerateRequest(
+        cv_data=cv.cv_data,
+        template_name=cv.template_name or "colorful",
+        color=cv.cv_data.get("color", "0056b3")
+    )
+    # Re-generate PDF inline (avoid code duplication by calling the core logic)
+    # We call generate_pdf but need to handle the return correctly
+    return await generate_pdf(req, user, db)
+
 @app.post("/api/admin/seed_templates")
 def seed_templates(db: Session = Depends(get_db)):
     try:
@@ -389,6 +418,7 @@ async def generate_pdf(request: CVGenerateRequest, user: dict = Depends(verify_t
             new_cv = CV(
                 user_id=user.get("uid"),
                 title=data.get("title", "My Auto-Generated CV"),
+                template_name=request.template_name,
                 cv_data=data
             )
             db.add(new_cv)
