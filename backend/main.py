@@ -542,3 +542,150 @@ Tone: confident, specific, and human. Each paragraph should be 3-4 sentences. Ou
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Cover letter PDF compilation failed: {str(e)}")
 
+# ─────────────────────────────────────────────
+# EMAIL DELIVERY
+# ─────────────────────────────────────────────
+class EmailRequest(BaseModel):
+    cv_data: dict
+    template_name: str = "colorful"
+    color: str = "0056b3"
+
+@app.post("/api/send_cv_email")
+async def send_cv_email(req: EmailRequest, user: dict = Depends(verify_token), db: Session = Depends(get_db)):
+    """Generate the PDF and email it to the authenticated user."""
+    recipient_email = user.get("email") or req.cv_data.get("email")
+    if not recipient_email:
+        raise HTTPException(status_code=400, detail="No email address found for user.")
+
+    # Reuse generate_pdf to get the bytes
+    pdf_req = CVGenerateRequest(cv_data=req.cv_data, template_name=req.template_name, color=req.color)
+    pdf_response = await generate_pdf(pdf_req, user, db)
+    pdf_bytes = pdf_response.body
+
+    SMTP_EMAIL = os.environ.get("SMTP_EMAIL")
+    SMTP_PASS  = os.environ.get("SMTP_PASS")
+    if not SMTP_EMAIL or not SMTP_PASS:
+        raise HTTPException(status_code=500, detail="Email not configured on the server.")
+
+    try:
+        msg = email.mime.multipart.MIMEMultipart()
+        msg["From"]    = f"Meshark AI <{SMTP_EMAIL}>"
+        msg["To"]      = recipient_email
+        msg["Subject"] = "Your Meshark AI CV is Ready 🎉"
+
+        body = email.mime.text.MIMEText(
+            f"Hi {req.cv_data.get('first_name', 'there')},\n\n"
+            "Your professional CV has been generated and is attached to this email.\n\n"
+            "Best of luck with your applications!\n\n— The Meshark AI Team",
+            "plain"
+        )
+        msg.attach(body)
+
+        attachment = email.mime.base.MIMEBase("application", "octet-stream")
+        attachment.set_payload(pdf_bytes)
+        encoders.encode_base64(attachment)
+        attachment.add_header("Content-Disposition", "attachment", filename="Meshark_AI_CV.pdf")
+        msg.attach(attachment)
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(SMTP_EMAIL, SMTP_PASS)
+            server.send_message(msg)
+
+        return {"message": f"CV sent successfully to {recipient_email}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+
+# ─────────────────────────────────────────────
+# PAYSTACK PAYMENT
+# ─────────────────────────────────────────────
+PAYSTACK_SECRET_KEY = os.environ.get("PAYSTACK_SECRET_KEY", "")
+
+class PaystackInitRequest(BaseModel):
+    template_id: str
+    amount: int  # in kobo (KES * 100)
+    email: str
+
+@app.post("/api/initiate_payment")
+async def initiate_payment(req: PaystackInitRequest, user: dict = Depends(verify_token)):
+    if not PAYSTACK_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="Paystack not configured.")
+    payload = json.dumps({
+        "email": req.email,
+        "amount": req.amount,
+        "currency": "KES",
+        "metadata": {"template_id": req.template_id, "user_id": user.get("uid")}
+    }).encode()
+    api_req = urllib.request.Request(
+        "https://api.paystack.co/transaction/initialize",
+        data=payload,
+        headers={"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}", "Content-Type": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(api_req) as resp:
+            data = json.loads(resp.read())
+        return {"authorization_url": data["data"]["authorization_url"], "reference": data["data"]["reference"]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Paystack error: {str(e)}")
+
+@app.get("/api/verify_payment/{reference}")
+async def verify_payment(reference: str, user: dict = Depends(verify_token), db: Session = Depends(get_db)):
+    if not PAYSTACK_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="Paystack not configured.")
+    api_req = urllib.request.Request(
+        f"https://api.paystack.co/transaction/verify/{reference}",
+        headers={"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"}
+    )
+    try:
+        with urllib.request.urlopen(api_req) as resp:
+            data = json.loads(resp.read())
+        if data["data"]["status"] == "success":
+            return {"status": "success", "template_id": data["data"]["metadata"].get("template_id")}
+        return {"status": "failed"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Paystack verify error: {str(e)}")
+
+# ─────────────────────────────────────────────
+# ATS SCORE
+# ─────────────────────────────────────────────
+@app.post("/api/ats_score")
+async def ats_score(req: CVGenerateRequest, user: dict = Depends(verify_token)):
+    """Score the CV data for ATS completeness and impact (0-100)."""
+    if not groq_client:
+        raise HTTPException(status_code=500, detail="Groq not configured.")
+    data = req.cv_data
+    prompt = f"""You are an ATS (Applicant Tracking System) expert. Score the following CV data out of 100.
+Consider: completeness of sections, use of action verbs, quantified achievements, keyword richness, and professional summary quality.
+Return ONLY a valid JSON object like: {{"score": 78, "grade": "B+", "feedback": ["Add metrics to bullet points", "Expand professional summary"]}}
+
+CV Data: {json.dumps(data, indent=2)[:3000]}"""
+
+    try:
+        completion = await groq_client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="llama-3.1-8b-instant",
+            temperature=0.2,
+            max_tokens=400,
+            response_format={"type": "json_object"}
+        )
+        result = json.loads(completion.choices[0].message.content)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Scoring failed: {str(e)}")
+
+# ─────────────────────────────────────────────
+# ADMIN STATS
+# ─────────────────────────────────────────────
+@app.get("/api/admin/stats")
+async def admin_stats(user: dict = Depends(verify_token), db: Session = Depends(get_db)):
+    if user.get("email") != "mesharkmuindi69@gmail.com":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    total_cvs = db.query(CV).count()
+    from sqlalchemy import func as sqlfunc
+    today = datetime.date.today()
+    cvs_today = db.query(CV).filter(sqlfunc.date(CV.created_at) == today).count()
+    template_counts = db.query(CV.template_name, sqlfunc.count(CV.id)).group_by(CV.template_name).all()
+    return {
+        "total_cvs": total_cvs,
+        "cvs_today": cvs_today,
+        "template_breakdown": {t: c for t, c in template_counts}
+    }

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, Loader2, Sparkles, LogOut, Clock, ArrowLeft, RefreshCw } from 'lucide-react';
+import { FileText, Download, Loader2, Sparkles, LogOut, Clock, ArrowLeft, RefreshCw, Edit2 } from 'lucide-react';
 import { auth, logout } from '../firebase';
 
-export default function UserDashboard({ user, onBack }) {
+export default function UserDashboard({ user, onBack, onEdit }) {
     const [cvs, setCvs] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [downloadingId, setDownloadingId] = useState(null);
@@ -178,17 +178,27 @@ export default function UserDashboard({ user, onBack }) {
                                                 {formatDate(cv.created_at)}
                                             </p>
                                         </div>
-                                        <button
-                                            onClick={() => handleDownload(cv.id, cv.cv_data?.name || cv.title)}
-                                            disabled={downloadingId === cv.id}
-                                            className="w-full flex items-center justify-center gap-2 bg-brand/10 text-brand hover:bg-brand hover:text-white py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
-                                        >
-                                            {downloadingId === cv.id
-                                                ? <><Loader2 size={14} className="animate-spin" /> Generating...</>
-                                                : <><Download size={14} /> Download PDF</>
-                                            }
-                                        </button>
-                                    </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => handleDownload(cv.id, cv.cv_data?.name || cv.title)}
+                                                disabled={downloadingId === cv.id}
+                                                className="flex-1 flex items-center justify-center gap-2 bg-brand/10 text-brand hover:bg-brand hover:text-white py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
+                                            >
+                                                {downloadingId === cv.id
+                                                    ? <><Loader2 size={14} className="animate-spin" /> Generating...</>
+                                                    : <><Download size={14} /> Download</>
+                                                }
+                                            </button>
+                                            {onEdit && (
+                                                <button
+                                                    onClick={() => onEdit(cv.cv_data)}
+                                                    className="p-2 bg-gray-100 text-gray-500 hover:bg-brand/10 hover:text-brand rounded-xl transition-colors flex items-center justify-center"
+                                                    title="Edit this CV"
+                                                >
+                                                    <Edit2 size={15} />
+                                                </button>
+                                            )}
+                                        </div>                                 </div>
                                 </div>
                             ))}
                         </div>

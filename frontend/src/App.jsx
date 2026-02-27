@@ -37,6 +37,9 @@ function App() {
   const [cvData, setCvData] = useState(null);
   const [coverLetterUrl, setCoverLetterUrl] = useState(null);
   const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
+  const [atsScore, setAtsScore] = useState(null);
+  const [isFetchingAts, setIsFetchingAts] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -235,6 +238,8 @@ function App() {
       });
       setPdfBlob(blob);
       setShowPdfModal(true);
+      // Auto-fetch ATS score in background
+      fetchAtsScore(data, templateConfig);
 
     } catch (err) {
       console.error(err);
@@ -284,6 +289,49 @@ function App() {
     }
   };
 
+  const fetchAtsScore = async (data, templateConfig) => {
+    if (!data || !user) return;
+    setIsFetchingAts(true);
+    setAtsScore(null);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetch(`${apiUrl}/api/ats_score`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ cv_data: data, template_name: templateConfig?.templateId || 'colorful', color: templateConfig?.color || '0056b3' })
+      });
+      if (!res.ok) throw new Error('ATS scoring failed');
+      const result = await res.json();
+      setAtsScore(result);
+    } catch (err) {
+      console.error('ATS score error:', err);
+    } finally {
+      setIsFetchingAts(false);
+    }
+  };
+
+  const sendCvEmail = async () => {
+    if (!cvData || !user || !selectedTemplateConfig) return;
+    setIsSendingEmail(true);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetch(`${apiUrl}/api/send_cv_email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ cv_data: cvData, template_name: selectedTemplateConfig.templateId, color: selectedTemplateConfig.color })
+      });
+      if (!res.ok) throw new Error('Email failed');
+      alert('CV sent to your email! 📧');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to send email. Please try again.');
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -299,7 +347,21 @@ function App() {
 
   // Handle User Dashboard
   if (showDashboard) {
-    return <UserDashboard user={user} onBack={() => setShowDashboard(false)} />;
+    return (
+      <UserDashboard
+        user={user}
+        onBack={() => setShowDashboard(false)}
+        onEdit={(oldCvData) => {
+          setCvData(oldCvData);
+          setIsChatComplete(true);
+          setShowDashboard(false);
+          setMessages(prev => [
+            ...prev,
+            { role: 'assistant', content: `I've loaded your previous CV data for ${oldCvData?.first_name || 'you'}. What would you like to update? You can tell me to change your job experience, skills, summary, or anything else!` }
+          ]);
+        }}
+      />
+    );
   }
 
   return (
@@ -453,6 +515,18 @@ function App() {
                     }
                   </button>
                 )}
+                {cvData && (
+                  <button
+                    onClick={sendCvEmail}
+                    disabled={isSendingEmail}
+                    className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-full transition-colors text-xs sm:text-sm font-medium disabled:opacity-50"
+                  >
+                    {isSendingEmail
+                      ? <><Loader2 size={14} className="animate-spin" /><span className="hidden sm:inline">Sending...</span></>
+                      : <><Send size={14} /><span className="hidden sm:inline">Email CV</span></>
+                    }
+                  </button>
+                )}
                 <button
                   onClick={handleDownload}
                   className="flex items-center gap-2 bg-brand hover:bg-brand-dark text-white px-4 py-1.5 rounded-full shadow transition-colors text-sm font-medium"
@@ -477,6 +551,31 @@ function App() {
                 className="absolute inset-0 w-full h-full border-0"
                 title="CV Preview"
               />
+            </div>
+            {/* ATS Score Panel */}
+            <div className="shrink-0 border-t border-gray-100 bg-gray-50 px-6 py-3 flex items-center gap-4">
+              {isFetchingAts ? (
+                <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <Loader2 size={14} className="animate-spin" />
+                  Calculating ATS score...
+                </div>
+              ) : atsScore ? (
+                <>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className={`text-xl font-extrabold ${atsScore.score >= 80 ? 'text-green-600' : atsScore.score >= 60 ? 'text-amber-500' : 'text-red-500'}`}>
+                      {atsScore.score}/100
+                    </div>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-white border border-gray-200 text-gray-600">{atsScore.grade}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 min-w-0">
+                    {(atsScore.feedback || []).slice(0, 3).map((tip, i) => (
+                      <span key={i} className="text-[11px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full truncate max-w-[200px]">💡 {tip}</span>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="text-xs text-gray-300">ATS score will appear here</div>
+              )}
             </div>
           </div>
         </div>
