@@ -105,7 +105,8 @@ function App() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSend = async () => {
+  const handleSend = async (e) => {
+    if (e) e.preventDefault();
     if (!input.trim() || isLoading) return;
 
     setIsVoiceMode(false);
