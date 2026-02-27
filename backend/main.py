@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
-from groq import Groq
+from groq import AsyncGroq
 from dotenv import load_dotenv
 
 from contextlib import asynccontextmanager
@@ -46,7 +46,7 @@ if not GROQ_API_KEY:
     groq_client = None
 else:
     try:
-        groq_client = Groq(api_key=GROQ_API_KEY)
+        groq_client = AsyncGroq(api_key=GROQ_API_KEY)
     except Exception as e:
         print(f"Warning: Could not initialize Groq client: {e}")
         groq_client = None
@@ -135,7 +135,7 @@ def read_root():
     return {"message": "Welcome to Meshark AI CV Builder Backend"}
 
 @app.post("/api/chat", response_model=ChatResponse)
-def chat_with_ai(request: ChatRequest):
+async def chat_with_ai(request: ChatRequest):
     if not groq_client:
         raise HTTPException(status_code=500, detail="Groq API not configured properly.")
 
@@ -145,7 +145,7 @@ def chat_with_ai(request: ChatRequest):
     messages.append({"role": "user", "content": request.message})
 
     try:
-        completion = groq_client.chat.completions.create(
+        completion = await groq_client.chat.completions.create(
             messages=messages,
             model="llama-3.1-8b-instant", 
             temperature=0.7,
@@ -166,7 +166,7 @@ def chat_with_ai(request: ChatRequest):
             extraction_messages.append({"role": "assistant", "content": ai_reply})
             extraction_messages.append({"role": "user", "content": EXTRACTION_PROMPT})
 
-            ext_completion = groq_client.chat.completions.create(
+            ext_completion = await groq_client.chat.completions.create(
                 messages=extraction_messages,
                 model="llama-3.1-8b-instant",
                 temperature=0.1, # Low temperature for accurate JSON extraction
@@ -237,8 +237,13 @@ class CVGenerateRequest(BaseModel):
     template_name: str = "colorful" # "moderncv" or "colorful"
     color: str = "0056b3" # Hex for "colorful" or word like 'blue' for moderncv
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
+executor = ThreadPoolExecutor(max_workers=5)
+
 @app.post("/api/generate_pdf")
-def generate_pdf(request: CVGenerateRequest, user: dict = Depends(verify_token), db: Session = Depends(get_db)):
+async def generate_pdf(request: CVGenerateRequest, user: dict = Depends(verify_token), db: Session = Depends(get_db)):
     data = request.cv_data
     template_path = f"templates/template_{request.template_name}.tex"
     
@@ -371,24 +376,28 @@ def generate_pdf(request: CVGenerateRequest, user: dict = Depends(verify_token),
         'Accept': 'application/pdf'
     })
 
-    try:
+    def make_request():
         with urllib.request.urlopen(req) as response:
-            pdf_bytes = response.read()
+            return response.read()
 
-            try:
-                # Save CV data to PostgreSQL
-                new_cv = CV(
-                    user_id=user.get("uid"),
-                    title=data.get("title", "My Auto-Generated CV"),
-                    cv_data=data
-                )
-                db.add(new_cv)
-                db.commit()
-                db.refresh(new_cv)
-                print(f"Saved CV to DB for user {user.get('uid')} (ID: {new_cv.id})")
-            except Exception as e:
-                print(f"Failed to save CV to Database: {e}")
+    try:
+        loop = asyncio.get_event_loop()
+        pdf_bytes = await loop.run_in_executor(executor, make_request)
 
-            return Response(content=pdf_bytes, media_type="application/pdf")
+        try:
+            # Save CV data to PostgreSQL
+            new_cv = CV(
+                user_id=user.get("uid"),
+                title=data.get("title", "My Auto-Generated CV"),
+                cv_data=data
+            )
+            db.add(new_cv)
+            db.commit()
+            db.refresh(new_cv)
+            print(f"Saved CV to DB for user {user.get('uid')} (ID: {new_cv.id})")
+        except Exception as e:
+            print(f"Failed to save CV to Database: {e}")
+
+        return Response(content=pdf_bytes, media_type="application/pdf")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to compile PDF: {str(e)}")
