@@ -263,9 +263,9 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex font-sans relative">
+    <div className="min-h-[100dvh] bg-gray-50 flex font-sans relative">
       {/* Chat Section */}
-      <div className="flex flex-col w-full max-w-4xl mx-auto h-screen transition-all duration-500 ease-in-out">
+      <div className="flex flex-col w-full max-w-4xl mx-auto h-[100dvh] transition-all duration-500 ease-in-out">
 
         {/* Header */}
         <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shadow-sm z-10 shrink-0">
@@ -274,7 +274,7 @@ function App() {
               <Sparkles className="text-brand" size={24} />
             </div>
             <div>
-              <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-brand to-brand-light">
+              <h1 className="text-lg sm:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-brand to-brand-light">
                 Meshark AI Builder
               </h1>
               <p className="text-xs text-gray-500 font-medium">Smart CV Assistant</p>
@@ -342,13 +342,13 @@ function App() {
         </div>
 
         {/* Input Area */}
-        <div className="p-3 sm:p-4 bg-white border-t border-gray-200 shadow-sm shrink-0">
+        <div className="p-3 sm:p-4 bg-white border-t border-gray-200 shadow-sm shrink-0 pb-[max(env(safe-area-inset-bottom),0.75rem)] sm:pb-4">
           <form onSubmit={handleSend} className="max-w-4xl mx-auto relative flex items-end">
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Type your response here..."
-              className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-xl pl-4 pr-14 py-3 focus:outline-none focus:ring-2 focus:ring-brand/50 focus:border-brand transition-all resize-none shadow-inner text-sm sm:text-base"
+              className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-xl pl-4 pr-24 py-3 focus:outline-none focus:ring-2 focus:ring-brand/50 focus:border-brand transition-all resize-none shadow-inner text-sm sm:text-base"
               rows="1"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
