@@ -1,0 +1,43 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{titlesec}
+
+\definecolor{primary}{HTML}{<COLOR_HEX>}
+
+\titleformat{\section}{\Large\bfseries\color{primary}}{}{0em}{}[\titlerule]
+
+\begin{document}
+\begin{center}
+    {\Huge \textbf{<FIRST_NAME> <LAST_NAME>}} \\ \vspace{2mm}
+    {\Large \textcolor{primary}{<TITLE>}} \\ \vspace{2mm}
+    <ADDRESS> $\bullet$ <PHONE> $\bullet$ \href{mailto:<EMAIL>}{<EMAIL>} \\
+    <PERSONAL_DETAILS_CMD>
+\end{center}
+
+\vspace{5mm}
+\section*{Summary}
+<SUMMARY>
+
+\section*{Experience}
+<EXPERIENCE>
+
+\section*{Education}
+<EDUCATION>
+
+\section*{Skills}
+<SKILLS>
+
+\section*{Languages}
+<LANGUAGES>
+
+\section*{Hobbies}
+<HOBBIES>
+
+\section*{Referees}
+<REFEREES>
+
+\end{document}

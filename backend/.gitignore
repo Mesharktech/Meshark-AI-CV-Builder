@@ -1,0 +1,21 @@
+# Environments
+.env
+.env.*
+!.env.example
+
+# Credentials
+firebase_credentials.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+error*.log
+db_error_out.txt
+
+# OS
+.DS_Store
+Thumbs.db
