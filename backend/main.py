@@ -60,15 +60,27 @@ class ChatResponse(BaseModel):
     is_complete: bool = False
     extracted_data: dict | None = None
 
-SYSTEM_PROMPT = """You are Meshark AI, an expert CV building assistant.
-Your goal is to interview the user to collect information needed to build a professional CV.
-Ask ONE question at a time. Be conversational and encouraging.
+SYSTEM_PROMPT = """You are Meshark AI, an expert CV building assistant and career coach.
+Your goal is to interview the user to collect information needed to build a professional, ATS-optimized CV.
+Ask ONE question at a time. Be conversational, encouraging, and specific.
+
+**Job Description Handling:**
+If the user pastes a job description at any point, extract and remember the KEY SKILLS and REQUIREMENTS from it.
+When gathering their work experience and skills, actively guide them to frame their experience using keywords from that job description.
+Give real-time coaching feedback like: "Great! To match the job requirements, could you add a specific metric or result for that achievement?"
+
+**CV Scoring Guidance:**
+As users describe their experience, gently push them to be more specific and impactful:
+- Encourage quantified achievements (e.g., "Managed 5 people" → "Led a team of 5, reducing delivery time by 20%")
+- Suggest action verbs (e.g., "Did sales" → "Exceeded quarterly sales targets by 35%")
+- Rate the strength of their bullet points and suggest improvements before moving on.
+
 You need to collect:
 1. Full Name and Contact Info (Email, Phone, Location)
 2. Personal Details (Date of Birth/Age, Nationality, District/Region)
 3. Professional Summary / Profile
 4. Education (Degree, Institution, Year)
-5. Work Experience (Role, Company, Dates, Key Responsibilities)
+5. Work Experience (Role, Company, Dates, Key Responsibilities with metrics)
 6. Technical/Soft Skills
 7. Languages Spoken
 8. Extracurricular Activities and Hobbies
@@ -266,6 +278,12 @@ class CVGenerateRequest(BaseModel):
     template_name: str = "colorful" # "moderncv" or "colorful"
     color: str = "0056b3" # Hex for "colorful" or word like 'blue' for moderncv
 
+class CoverLetterRequest(BaseModel):
+    cv_data: dict
+    job_description: str = ""
+    company_name: str = ""
+    hiring_manager: str = "Hiring Manager"
+
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
@@ -431,3 +449,81 @@ async def generate_pdf(request: CVGenerateRequest, user: dict = Depends(verify_t
         return Response(content=pdf_bytes, media_type="application/pdf")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to compile PDF: {str(e)}")
+
+@app.post("/api/generate_cover_letter")
+async def generate_cover_letter(request: CoverLetterRequest, user: dict = Depends(verify_token)):
+    if not groq_client:
+        raise HTTPException(status_code=500, detail="Groq API not configured.")
+
+    data = request.cv_data
+    name = data.get("name") or data.get("full_name") or "Applicant"
+    phone = data.get("phone", "")
+    email = data.get("email", "")
+    job_title = data.get("desired_role") or data.get("title") or ""
+    experience_summary = ""
+    works = data.get("work_experience", [])
+    if isinstance(works, list) and works:
+        experience_summary = "; ".join([f"{w.get('title','')} at {w.get('company','')}" for w in works[:3]])
+
+    jd_context = f"\n\nJob Description to tailor towards:\n{request.job_description}" if request.job_description.strip() else ""
+
+    prompt = f"""Write a professional, engaging cover letter body (3 paragraphs only, no salutation or sign-off) for {name} applying to {request.company_name or 'the company'} as {job_title or 'the open role'}.
+Their recent experience: {experience_summary}.
+Skills: {', '.join(data.get('skills', {}).get(list(data.get('skills', {}).keys())[0], []) if isinstance(data.get('skills'), dict) and data.get('skills') else data.get('skills', []) or []) if data.get('skills') else 'various professional skills'}.
+Tone: confident, specific, and human. Each paragraph should be 3-4 sentences. Output ONLY the body paragraphs.{jd_context}"""
+
+    try:
+        completion = await groq_client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="llama-3.1-8b-instant",
+            temperature=0.7,
+            max_tokens=800,
+        )
+        body_text = completion.choices[0].message.content.strip()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {str(e)}")
+
+    # Build the LaTeX document
+    import datetime
+    today = datetime.date.today().strftime("%B %d, %Y")
+    color_hex = "0056b3"
+
+    with open("templates/template_coverletter.tex", "r") as f:
+        tex = f.read()
+
+    # Escape special LaTeX characters
+    def latex_escape(s):
+        return s.replace("&", "\\&").replace("%", "\\%").replace("$","\\$").replace("#","\\#").replace("_","\\_").replace("{","\\{").replace("}","\\}").replace("~","\\textasciitilde{}").replace("^","\\^{}")
+
+    # Convert plain paragraphs to LaTeX paragraphs
+    paragraphs = [p.strip() for p in body_text.split("\n\n") if p.strip()]
+    latex_body = "\n\n".join([latex_escape(p) for p in paragraphs])
+
+    tex = tex.replace("<COLOR>", color_hex)
+    tex = tex.replace("<NAME>", latex_escape(name))
+    tex = tex.replace("<PHONE>", latex_escape(phone))
+    tex = tex.replace("<EMAIL>", latex_escape(email))
+    tex = tex.replace("<DATE>", today)
+    tex = tex.replace("<HIRING_MANAGER>", latex_escape(request.hiring_manager))
+    tex = tex.replace("<COMPANY_NAME>", latex_escape(request.company_name or "the Company"))
+    tex = tex.replace("<BODY>", latex_body)
+
+    payload = {"compiler": "pdflatex", "resources": [{"main": True, "content": tex}]}
+    data_json = json.dumps(payload).encode("utf-8")
+    url = "https://latex.ytotech.com/builds/sync"
+    req_obj = urllib.request.Request(url, data=data_json, headers={
+        "Content-Type": "application/json",
+        "Accept": "application/pdf"
+    })
+
+    def make_request():
+        with urllib.request.urlopen(req_obj) as resp:
+            return resp.read()
+
+    try:
+        loop = asyncio.get_event_loop()
+        pdf_bytes = await loop.run_in_executor(executor, make_request)
+        return Response(content=pdf_bytes, media_type="application/pdf")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Cover letter PDF compilation failed: {str(e)}")
+

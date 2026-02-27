@@ -22,8 +22,9 @@ const ChatMessage = ({ message, isBot }) => (
 
 function App() {
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: 'Hi there! I am Meshark AI, your personal CV building assistant. I will ask you a few questions to get to know your professional background, and then I will generate a beautiful, modern CV for you. Let\'s start with the basics: What is your full name and the best phone number and email to reach you?' }
+    { role: 'assistant', content: 'Hi there! I am Meshark AI, your personal CV building assistant. I will ask you a few questions to get to know your professional background, and then I will generate a beautiful, modern CV for you. Optionally, if you have a job you are targeting, paste the job description and I will tailor your CV to it. Let\'s start: What is your full name and the best phone number and email to reach you?' }
   ]);
+  const [jobDescription, setJobDescription] = useState('');
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pdfBlob, setPdfBlob] = useState(null);
@@ -34,6 +35,8 @@ function App() {
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [isChatComplete, setIsChatComplete] = useState(false);
   const [cvData, setCvData] = useState(null);
+  const [coverLetterUrl, setCoverLetterUrl] = useState(null);
+  const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
 
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -248,8 +251,37 @@ function App() {
     a.download = 'Meshark_AI_CV.pdf';
     document.body.appendChild(a);
     a.click();
-    window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
+  };
+
+  const generateCoverLetter = async () => {
+    if (!cvData || !user) return;
+    setIsGeneratingCoverLetter(true);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch(`${apiUrl}/api/generate_cover_letter`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ cv_data: cvData, job_description: jobDescription, company_name: '', hiring_manager: 'Hiring Manager' })
+      });
+      if (!response.ok) throw new Error('Cover letter generation failed');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      setCoverLetterUrl(url);
+      // Open in new tab for download
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Meshark_Cover_Letter.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error(err);
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I could not generate a cover letter right now.' }]);
+    } finally {
+      setIsGeneratingCoverLetter(false);
+    }
   };
 
   if (authLoading) {
@@ -408,7 +440,19 @@ function App() {
                 <span className="font-semibold text-sm tracking-wide">Your Professional CV is Ready</span>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
+                {cvData && (
+                  <button
+                    onClick={generateCoverLetter}
+                    disabled={isGeneratingCoverLetter}
+                    className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-full transition-colors text-xs sm:text-sm font-medium disabled:opacity-50"
+                  >
+                    {isGeneratingCoverLetter
+                      ? <><Loader2 size={14} className="animate-spin" /><span className="hidden sm:inline">Generating...</span></>
+                      : <><FileText size={14} /><span className="hidden sm:inline">Cover Letter</span></>
+                    }
+                  </button>
+                )}
                 <button
                   onClick={handleDownload}
                   className="flex items-center gap-2 bg-brand hover:bg-brand-dark text-white px-4 py-1.5 rounded-full shadow transition-colors text-sm font-medium"
