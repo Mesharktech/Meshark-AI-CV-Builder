@@ -279,7 +279,27 @@ def seed_templates(db: Session = Depends(get_db)):
                 price=500,
                 storage_path="templates/template_colorful.tex",
                 is_active=True
-            )
+            ),
+            Template(
+                id="executive",
+                name="Executive (Premium)",
+                description="A refined single-column corporate layout with navy rule dividers. Perfect for senior and C-suite roles.",
+                thumbnail_url="https://makefreecv.com/assets/images/templates/professional.jpg",
+                is_premium=True,
+                price=500,
+                storage_path="templates/template_executive.tex",
+                is_active=True
+            ),
+            Template(
+                id="academic",
+                name="Academic (Free)",
+                description="A clean, research-focused CV with compact sections and a minimal serif header. Ideal for academia and research.",
+                thumbnail_url="https://makefreecv.com/assets/images/templates/professional.jpg",
+                is_premium=False,
+                price=0,
+                storage_path="templates/template_academic.tex",
+                is_active=True
+            ),
         ]
         db.add_all(templates_to_add)
         db.commit()
@@ -423,6 +443,55 @@ async def generate_pdf(request: CVGenerateRequest, user: dict = Depends(verify_t
                  skill_str += f"\\noindent \\textbf{{{cat}: }} {', '.join(items)} \\vspace{{0.2em}}\\\\\n"
         elif isinstance(skills, list):
              skill_str += f"\\noindent \\textbf{{General: }} {', '.join(skills)} \\\\\n"
+        tex_content = tex_content.replace("<SKILLS>", skill_str)
+
+    elif request.template_name in ("executive", "academic"):
+        tex_content = tex_content.replace("<COLOR_HEX>", request.color.replace("#", ""))
+
+        pd_cmd = f"\\\\ \\vspace{{0.15em}}\n{{\\small {pd_str}}}" if pd_str else ""
+        tex_content = tex_content.replace("<PERSONAL_DETAILS_CMD>", pd_cmd)
+
+        hobby_str = f"\\noindent {', '.join(hobbies)} \\\\ \\vspace{{0.4em}}\n" if hobbies else ""
+        tex_content = tex_content.replace("<HOBBIES>", hobby_str)
+
+        lang_str = f"\\noindent {', '.join(langs)} \\\\ \\vspace{{0.4em}}\n" if langs else ""
+        tex_content = tex_content.replace("<LANGUAGES>", lang_str)
+
+        ref_str = ""
+        for r in refs:
+            name_str = r.get("name", "")
+            contact_str = r.get("contact", "")
+            title_str = r.get("title", "")
+            if name_str or contact_str:
+                ref_str += f"\\noindent\\textbf{{{name_str}}} \\hfill {contact_str} \\\\\n"
+            if title_str:
+                ref_str += f"\\noindent \\textit{{{title_str}}} \\\\ \\vspace{{0.4em}}\n"
+        tex_content = tex_content.replace("<REFEREES>", ref_str)
+
+        # Format Education
+        edu_str = ""
+        for edu in data.get("education", []):
+            edu_str += f"\\noindent\\textbf{{{edu.get('institution')}}} \\hfill {edu.get('location', '')} \\\\\n"
+            edu_str += f"\\noindent \\textit{{{edu.get('degree')}}} \\hfill {edu.get('year', '')} \\\\ \\vspace{{0.5em}}\n"
+        tex_content = tex_content.replace("<EDUCATION>", edu_str)
+
+        # Format Experience
+        exp_str = ""
+        for exp in data.get("experience", []):
+            exp_str += f"\\noindent\\textbf{{{exp.get('role')}}} \\hfill \\textit{{{exp.get('dates', '')}}} \\\\\n"
+            exp_str += f"\\noindent \\textit{{{exp.get('company')}}} \\hfill {exp.get('location', '')} \\\\\n"
+            resps = "".join([f"\\item {r}\n" for r in exp.get("responsibilities", [])])
+            exp_str += f"\\begin{{itemize}} {resps} \\end{{itemize}} \\vspace{{0.5em}}\n"
+        tex_content = tex_content.replace("<EXPERIENCE>", exp_str)
+
+        # Format Skills
+        skill_str = ""
+        skills = data.get("skills", {})
+        if isinstance(skills, dict):
+            for cat, items in skills.items():
+                skill_str += f"\\noindent \\textbf{{{cat}:}} {', '.join(items)} \\\\ \\vspace{{0.2em}}\n"
+        elif isinstance(skills, list):
+            skill_str += f"\\noindent {', '.join(skills)} \\\\\n"
         tex_content = tex_content.replace("<SKILLS>", skill_str)
 
     # Compile via API

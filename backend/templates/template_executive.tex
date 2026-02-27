@@ -1,0 +1,72 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2cm, top=1.8cm, bottom=1.8cm]{geometry}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{fontenc}
+\usepackage{enumitem}
+\usepackage{parskip}
+\usepackage{titlesec}
+\usepackage{array}
+\usepackage{tabularx}
+
+\definecolor{navyblue}{HTML}{<COLOR_HEX>}
+\definecolor{darkgray}{HTML}{4A4A4A}
+\definecolor{lightgray}{HTML}{F5F5F5}
+
+\hypersetup{colorlinks=false}
+
+% Section formatting: bold, navy, with rule underneath
+\titleformat{\section}{\large\bfseries\color{navyblue}}{}{0em}{}[\vspace{0.2em}\textcolor{navyblue}{\titlerule[1.5pt]}\vspace{0.3em}]
+\titlespacing*{\section}{0pt}{1em}{0.5em}
+
+\pagestyle{empty}
+\setlist[itemize]{noitemsep, topsep=2pt, leftmargin=1.2em}
+
+\begin{document}
+
+% ── Header ──────────────────────────────────────────────────────────────
+\begin{center}
+    {\Huge\bfseries\color{navyblue} <FIRST_NAME> <LAST_NAME>} \\[4pt]
+    {\large\color{darkgray} <TITLE>} \\[6pt]
+    {\small\color{darkgray}
+        <ADDRESS> \quad\textbf{·}\quad
+        \href{tel:<PHONE>}{<PHONE>} \quad\textbf{·}\quad
+        \href{mailto:<EMAIL>}{<EMAIL>}
+    }
+    <PERSONAL_DETAILS_CMD>
+\end{center}
+
+\vspace{0.5em}
+\textcolor{navyblue}{\rule{\linewidth}{1.5pt}}
+\vspace{0.3em}
+
+% ── Professional Summary ────────────────────────────────────────────────
+\section*{Executive Profile}
+\color{darkgray}
+<SUMMARY>
+
+% ── Work Experience ─────────────────────────────────────────────────────
+\section*{Professional Experience}
+<EXPERIENCE>
+
+% ── Education ───────────────────────────────────────────────────────────
+\section*{Education}
+<EDUCATION>
+
+% ── Core Competencies ───────────────────────────────────────────────────
+\section*{Core Competencies}
+<SKILLS>
+
+% ── Languages ───────────────────────────────────────────────────────────
+\section*{Languages}
+<LANGUAGES>
+
+% ── Interests ───────────────────────────────────────────────────────────
+\section*{Professional Interests}
+<HOBBIES>
+
+% ── Referees ────────────────────────────────────────────────────────────
+\section*{References}
+<REFEREES>
+
+\end{document}

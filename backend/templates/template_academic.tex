@@ -1,0 +1,62 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=2.2cm, top=1.8cm, bottom=1.8cm]{geometry}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{parskip}
+\usepackage{titlesec}
+\usepackage{tabularx}
+\usepackage{booktabs}
+
+\definecolor{accentcolor}{HTML}{<COLOR_HEX>}
+\definecolor{darkgray}{HTML}{333333}
+\definecolor{medgray}{HTML}{666666}
+
+\hypersetup{colorlinks=true, urlcolor=accentcolor, linkcolor=accentcolor}
+
+% Section style: left-aligned, with thin colored underline
+\titleformat{\section}{\normalsize\bfseries\uppercase\color{darkgray}}{}{0em}{}[\vspace{0.1em}\textcolor{accentcolor}{\rule{\linewidth}{0.8pt}}\vspace{0.2em}]
+\titlespacing*{\section}{0pt}{1em}{0.4em}
+
+\pagestyle{empty}
+\setlist[itemize]{noitemsep, topsep=2pt, leftmargin=1.4em}
+
+\begin{document}
+
+% ── Header ──────────────────────────────────────────────────────────────
+{\huge\bfseries\color{darkgray} <FIRST_NAME> <LAST_NAME>}\\[2pt]
+{\normalsize\color{medgray}\textit{<TITLE>}}\\[4pt]
+{\small <ADDRESS> \ | \ \href{tel:<PHONE>}{<PHONE>} \ | \ \href{mailto:<EMAIL>}{<EMAIL>}}
+<PERSONAL_DETAILS_CMD>
+
+\vspace{0.6em}
+
+% ── Research Summary / Profile ──────────────────────────────────────────
+\section{Profile}
+{\small\color{darkgray} <SUMMARY>}
+
+% ── Education ───────────────────────────────────────────────────────────
+\section{Academic Qualifications}
+<EDUCATION>
+
+% ── Research / Work Experience ──────────────────────────────────────────
+\section{Research \& Professional Experience}
+<EXPERIENCE>
+
+% ── Skills ──────────────────────────────────────────────────────────────
+\section{Skills \& Methodologies}
+<SKILLS>
+
+% ── Languages ───────────────────────────────────────────────────────────
+\section{Languages}
+<LANGUAGES>
+
+% ── Hobbies / Activities ────────────────────────────────────────────────
+\section{Activities \& Interests}
+<HOBBIES>
+
+% ── References ──────────────────────────────────────────────────────────
+\section{Referees}
+<REFEREES>
+
+\end{document}
