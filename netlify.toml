@@ -1,0 +1,11 @@
+[build]
+  # Build settings applied to the whole site
+  base = "frontend"
+  command = "npm run build"
+  publish = "dist"
+
+[[redirects]]
+  # Redirect all traffic to index.html for React Router SPA
+  from = "/*"
+  to = "/index.html"
+  status = 200
