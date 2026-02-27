@@ -2,12 +2,21 @@ import os
 import json
 import urllib.request
 import urllib.parse
-from fastapi import FastAPI, HTTPException, Depends
+import smtplib
+import email.mime.multipart
+import email.mime.base
+import email.mime.text
+import datetime
+from email import encoders
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from groq import AsyncGroq
 from dotenv import load_dotenv
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from contextlib import asynccontextmanager
 
@@ -30,6 +39,11 @@ async def lifespan(app: FastAPI):
 load_dotenv()
 
 app = FastAPI(title="Meshark AI CV Builder API", lifespan=lifespan)
+
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -147,14 +161,15 @@ def read_root():
     return {"message": "Welcome to Meshark AI CV Builder Backend"}
 
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat_with_ai(request: ChatRequest):
+@limiter.limit("20/day")
+async def chat_with_ai(request: Request, body: ChatRequest):
     if not groq_client:
         raise HTTPException(status_code=500, detail="Groq API not configured properly.")
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    for msg in request.history:
+    for msg in body.history:
         messages.append({"role": msg["role"], "content": msg["content"]})
-    messages.append({"role": "user", "content": request.message})
+    messages.append({"role": "user", "content": body.message})
 
     try:
         completion = await groq_client.chat.completions.create(
