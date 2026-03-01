@@ -149,7 +149,15 @@ function App() {
         })
       });
 
-      if (!response.ok) throw new Error('Network response was not ok');
+      if (!response.ok) {
+        // Try to extract a meaningful error from the server response
+        let errDetail = `Server error (${response.status})`;
+        try {
+          const errBody = await response.json();
+          errDetail = errBody.detail || errDetail;
+        } catch (_) {}
+        throw new Error(errDetail);
+      }
 
       const data = await response.json();
 
@@ -169,10 +177,13 @@ function App() {
 
     } catch (error) {
       console.error("Error communicating with AI:", error);
+      const errorMsg = error.message && !error.message.includes('fetch')
+        ? `⚠️ ${error.message}`
+        : "Sorry, I couldn't connect to the server. Please check your internet connection and try again.";
       setMessages(prev => {
         const updated = [...prev];
         const lastIdx = updated.length - 1;
-        updated[lastIdx] = { role: 'assistant', content: "Sorry, I encountered an error connecting to the server. Please try again." };
+        updated[lastIdx] = { role: 'assistant', content: errorMsg };
         return updated;
       });
     } finally {

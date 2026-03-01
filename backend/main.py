@@ -161,7 +161,7 @@ def read_root():
     return {"message": "Welcome to Meshark AI CV Builder Backend"}
 
 @app.post("/api/chat", response_model=ChatResponse)
-@limiter.limit("20/day")
+@limiter.limit("100/day")
 async def chat_with_ai(request: Request, body: ChatRequest):
     if not groq_client:
         raise HTTPException(status_code=500, detail="Groq API not configured properly.")
@@ -209,6 +209,8 @@ async def chat_with_ai(request: Request, body: ChatRequest):
         return ChatResponse(reply=ai_reply, is_complete=is_complete, extracted_data=extracted_data)
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/templates")
