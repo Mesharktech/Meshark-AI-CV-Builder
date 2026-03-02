@@ -1,36 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { FileText, Download, Loader2, Sparkles, LogOut, Clock, ArrowLeft, RefreshCw, Edit2 } from 'lucide-react';
 import { auth, logout } from '../firebase';
+import { useQuery } from '@tanstack/react-query';
 
 export default function UserDashboard({ user, onBack, onEdit }) {
-    const [cvs, setCvs] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
     const [downloadingId, setDownloadingId] = useState(null);
-    const [error, setError] = useState(null);
 
-    useEffect(() => {
-        if (user) fetchCvs();
-    }, [user]);
-
-    const fetchCvs = async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
+    const { data: cvs = [], isLoading, error, refetch: fetchCvs } = useQuery({
+        queryKey: ['cvs', user?.uid],
+        queryFn: async () => {
             const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
             const token = await auth.currentUser.getIdToken();
             const res = await fetch(`${apiUrl}/api/cvs`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!res.ok) throw new Error('Failed to fetch CVs');
-            const data = await res.json();
-            setCvs(data);
-        } catch (err) {
-            setError('Could not load your documents. Please try again.');
-            console.error(err);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+            return res.json();
+        },
+        enabled: !!user,
+    });
 
     const handleDownload = async (cvId, name) => {
         setDownloadingId(cvId);
@@ -125,9 +113,9 @@ export default function UserDashboard({ user, onBack, onEdit }) {
                     </div>
                 ) : error ? (
                     <div className="flex flex-col items-center justify-center h-64 bg-white rounded-2xl border border-dashed border-red-200 p-8">
-                        <p className="text-red-500 font-medium mb-4">{error}</p>
+                        <p className="text-red-500 font-medium mb-4">{error.message || 'Could not load your documents. Please try again.'}</p>
                         <button
-                            onClick={fetchCvs}
+                            onClick={() => fetchCvs()}
                             className="flex items-center gap-2 text-sm text-brand hover:underline font-medium"
                         >
                             <RefreshCw size={14} /> Try again

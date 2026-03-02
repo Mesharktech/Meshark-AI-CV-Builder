@@ -1,15 +1,18 @@
-# Use Node.js runtime
 [build]
-  command = "npm run build"
+  command = "node env-check.js && npm run build"
   publish = "dist"
-  ignore = "false"
 
 [build.environment]
-  NODE_VERSION = "20"
-  SECRETS_SCAN_ENABLED = "false"
+  NODE_VERSION = "18"
 
-# Fallback routing for Single Page Applications (React Router, etc.)
+# Redirects for Single Page Applications (SPA)
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Cache static assets
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

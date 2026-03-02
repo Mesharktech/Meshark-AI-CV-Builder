@@ -1,51 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Settings, Plus, LayoutTemplate, Trash2, Edit2, Loader2, Check, BarChart2, FileText, Calendar } from 'lucide-react';
 import { signInWithGoogle } from '../firebase';
+import { useQuery } from '@tanstack/react-query';
 
 export default function AdminDashboard({ user }) {
-    const [templates, setTemplates] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('templates');
-    const [stats, setStats] = useState(null);
-    const [isLoadingStats, setIsLoadingStats] = useState(false);
 
     const isAdmin = user && user.email === 'mesharkmuindi69@gmail.com';
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
-    useEffect(() => {
-        if (isAdmin) fetchTemplates();
-    }, [isAdmin]);
-
-    useEffect(() => {
-        if (isAdmin && activeTab === 'stats') fetchStats();
-    }, [activeTab, isAdmin]);
-
-    const fetchTemplates = async () => {
-        setIsLoading(true);
-        try {
+    const { data: templates = [], isLoading } = useQuery({
+        queryKey: ['admin-templates'],
+        queryFn: async () => {
             const response = await fetch(`${apiUrl}/api/templates`);
-            if (response.ok) setTemplates(await response.json());
-        } catch (err) {
-            console.error('Failed to fetch templates as admin', err);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+            if (!response.ok) throw new Error('Failed to fetch templates');
+            return response.json();
+        },
+        enabled: !!isAdmin,
+    });
 
-    const fetchStats = async () => {
-        setIsLoadingStats(true);
-        try {
+    const { data: stats, isLoading: isLoadingStats, refetch: fetchStats } = useQuery({
+        queryKey: ['admin-stats'],
+        queryFn: async () => {
             const token = await user.getIdToken();
             const response = await fetch(`${apiUrl}/api/admin/stats`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (response.ok) setStats(await response.json());
-        } catch (err) {
-            console.error('Failed to fetch stats', err);
-        } finally {
-            setIsLoadingStats(false);
-        }
-    };
+            if (!response.ok) throw new Error('Failed to fetch stats');
+            return response.json();
+        },
+        enabled: !!isAdmin && activeTab === 'stats',
+    });
 
     if (!user) {
         return (

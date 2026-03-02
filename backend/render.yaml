@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: meshark-cv-api
+    env: python
+    region: frankfurt
+    plan: free
+    buildCommand: "./check.py && pip install -r requirements.txt && apt-get update && apt-get install -y texlive-latex-base texlive-latex-extra texlive-fonts-recommended"
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: FIREBASE_CREDENTIALS_JSON
+        sync: false
+      - key: SMTP_EMAIL
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PYTHONPATH
+        value: "/opt/render/project/src"

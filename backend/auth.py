@@ -4,6 +4,7 @@ import firebase_admin
 from firebase_admin import credentials, auth
 from fastapi import HTTPException, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from core.logger import logger
 
 # Initialize Firebase Admin - supports both file path and JSON env var
 try:
@@ -21,7 +22,7 @@ try:
     else:
         firebase_app = firebase_admin.get_app()
 except Exception as e:
-    print(f"Warning: Firebase initialization failed: {e}")
+    logger.warning(f"Firebase initialization failed: {e}")
     firebase_app = None
 
 security = HTTPBearer()
