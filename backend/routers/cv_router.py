@@ -28,6 +28,8 @@ def get_templates(db: Session = Depends(get_db)):
 
 @router.get("/cvs")
 async def list_user_cvs(user: dict = Depends(verify_token), db: Session = Depends(get_db)):
+    if db is None:
+        return []  # Return empty list if DB is unavailable
     user_cvs = db.query(CV).filter(CV.user_id == user.get("uid")).order_by(CV.created_at.desc()).all()
     return [{
         "id": cv.id,
@@ -43,15 +45,16 @@ async def generate_pdf(request: CVGenerateRequest, user: dict = Depends(verify_t
         pdf_bytes = await compile_cv_pdf(request.cv_data, request.template_name, request.color)
         
         try:
-            new_cv = CV(
-                user_id=user.get("uid"),
-                title=request.cv_data.get("title", "My Auto-Generated CV"),
-                template_name=request.template_name,
-                cv_data=request.cv_data
-            )
-            db.add(new_cv)
-            db.commit()
-            db.refresh(new_cv)
+            if db is not None:
+                new_cv = CV(
+                    user_id=user.get("uid"),
+                    title=request.cv_data.get("title", "My Auto-Generated CV"),
+                    template_name=request.template_name,
+                    cv_data=request.cv_data
+                )
+                db.add(new_cv)
+                db.commit()
+                db.refresh(new_cv)
         except Exception as e:
             logger.error(f"Failed to save CV to Database: {e}")
 
